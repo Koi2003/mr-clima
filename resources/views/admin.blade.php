@@ -163,6 +163,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="mc-pagination" id="solicitudes-paginacion"></div>
             </div>
 
             <!-- TAB: PEDIDOS COBRADOS / ENVIOS -->
@@ -174,16 +175,18 @@
                                 <th>Pedido</th>
                                 <th>Cliente / Teléfono</th>
                                 <th>Dirección de Entrega</th>
+                                <th>Lavadora</th>
                                 <th>Total / Método</th>
                                 <th>Estado Pago</th>
                                 <th>Estado Envío</th>
                             </tr>
                         </thead>
                         <tbody id="pedidos-tbody">
-                            <tr><td colspan="6" style="text-align:center;color:var(--mc-text-muted)">Cargando pedidos...</td></tr>
+                            <tr><td colspan="7" style="text-align:center;color:var(--mc-text-muted)">Cargando pedidos...</td></tr>
                         </tbody>
                     </table>
                 </div>
+                <div class="mc-pagination" id="pedidos-paginacion"></div>
             </div>
 
             <!-- TAB: INVENTARIO -->
@@ -300,6 +303,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="mc-pagination" id="productos-paginacion"></div>
             </div>
 
         </div>

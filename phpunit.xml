@@ -19,6 +19,13 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!--
+            Las pruebas no deben heredar la subcarpeta de desarrollo.
+            En local APP_URL es http://localhost/Misclim/public, y TestCase
+            construye la URL con url(), así que la ruta acababa siendo
+            /Misclim/public/api/... -> 404 en 24 de 28 tests.
+        -->
+        <env name="APP_URL" value="http://localhost"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

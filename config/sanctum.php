@@ -50,7 +50,9 @@ return [
     |
     */
 
-    'expiration' => null,
+    // 480 minutos = 8 horas. Los tokens del panel caducan a diario: si uno se
+    // filtra (por ejemplo vía XSS), no da acceso perpetuo al administrador.
+    'expiration' => 480,
 
     /*
     |--------------------------------------------------------------------------

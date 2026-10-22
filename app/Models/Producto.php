@@ -120,11 +120,17 @@ class Producto extends Model
     /**
      * Marca la unidad como reservada y fija la caducidad de la reserva.
      * Debe invocarse SIEMPRE dentro de una transacción con lockForUpdate().
+     *
+     * @param int|null $minutos Reserva corta (p. ej. mientras el cliente paga
+     *                          con tarjeta). Si es null se aplica el plazo
+     *                          general de config('mrclima.reserva_horas').
      */
-    public function reservar(): void
+    public function reservar(?int $minutos = null): void
     {
         $this->estado_stock    = EstadoStock::Reservado;
-        $this->reservado_hasta = Carbon::now()->addHours(config('mrclima.reserva_horas'));
+        $this->reservado_hasta = $minutos
+            ? Carbon::now()->addMinutes($minutos)
+            : Carbon::now()->addHours(config('mrclima.reserva_horas'));
         $this->save();
     }
 
@@ -134,6 +140,20 @@ class Producto extends Model
     public function liberar(): void
     {
         $this->estado_stock    = EstadoStock::Disponible;
+        $this->reservado_hasta = null;
+        $this->save();
+    }
+
+    /**
+     * Cierra la venta: pasa a 'vendido' y limpia la caducidad de la reserva.
+     *
+     * Se hace con asignación directa y NO con update([...]) porque
+     * 'reservado_hasta' queda fuera de $fillable a propósito: solo la lógica
+     * de dominio puede tocarlo. Un update() lo ignoraría en silencio.
+     */
+    public function marcarComoVendido(): void
+    {
+        $this->estado_stock    = EstadoStock::Vendido;
         $this->reservado_hasta = null;
         $this->save();
     }

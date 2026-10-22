@@ -42,7 +42,19 @@ class ProductoAdminController extends Controller
             ->paginate(perPage: 20)
             ->withQueryString(); // Mantiene el filtro al paginar.
 
-        return ProductoResource::collection($productos);
+        // KPIs globales calculados en la BD (ver comentario en
+        // SolicitudAdminController::index).
+        return ProductoResource::collection($productos)
+            ->additional([
+                'kpis' => [
+                    'disponibles' => Producto::query()
+                        ->where('estado_stock', EstadoStock::Disponible->value)
+                        ->count(),
+                    'reservados'  => Producto::query()
+                        ->where('estado_stock', EstadoStock::Reservado->value)
+                        ->count(),
+                ],
+            ]);
     }
 
     /** GET /api/admin/productos/{producto} — detalle de una unidad. */

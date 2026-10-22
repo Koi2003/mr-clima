@@ -20,6 +20,14 @@ return [
     'reserva_horas' => (int) env('MRCLIMA_RESERVA_HORAS', 48),
 
     /*
+    | Contraseña inicial del administrador (opcional).
+    | Se lee aquí, y no con env() dentro del seeder, porque env() devuelve
+    | null en cuanto se activa la caché de configuración (config:cache),
+    | que es justo lo que se hace al desplegar en producción.
+    */
+    'admin_password' => env('ADMIN_PASSWORD'),
+
+    /*
     | Dirección que recibe el aviso por email cada vez que entra una
     | solicitud de servicio técnico. En producción debe ser el correo
     | que el dueño mira a diario.

@@ -32,7 +32,20 @@ class SolicitudAdminController extends Controller
             ->paginate(perPage: 20)
             ->withQueryString(); // Mantiene el filtro al paginar.
 
-        return SolicitudTecnicaResource::collection($solicitudes);
+        /*
+         * El KPI se cuenta en la base de datos, no filtrando json.data: antes
+         * el panel contaba solo los elementos de la página visible (20) y el
+         * número cambiaba al aplicar el filtro de la tabla, que no es lo que
+         * mide un indicador global.
+         */
+        return SolicitudTecnicaResource::collection($solicitudes)
+            ->additional([
+                'kpis' => [
+                    'pendientes' => SolicitudTecnica::query()
+                        ->where('estado', EstadoSolicitud::Pendiente->value)
+                        ->count(),
+                ],
+            ]);
     }
 
     /** PATCH /api/admin/solicitudes/{solicitud} — cambio de estado explícito. */

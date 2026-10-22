@@ -31,6 +31,20 @@ async function apiCall(method, path, body = null, auth = false) {
   });
 
   const json = await res.json().catch(() => null);
+
+  /*
+   * Token caducado o revocado en la base de datos: sin esto el panel se
+   * quedaba en blanco mostrando "Error al cargar" y el usuario no tenía
+   * forma de saber que solo tenía que volver a entrar.
+   */
+  if (res.status === 401 && auth) {
+    adminToken = null;
+    localStorage.removeItem('mc-admin-token');
+    hideAdminPanel();
+    document.getElementById('admin-dashboard')?.classList.remove('active');
+    showToast('Tu sesión ha caducado. Vuelve a entrar.', 'error');
+  }
+
   return { status: res.status, ok: res.ok, json };
 }
 
@@ -120,6 +134,12 @@ function initSmoothScroll() {
 let currentPage = 1;
 let catalogMeta = null;
 
+/* Página actual de cada tabla del panel (el servidor pagina de 15 en 15
+   los pedidos y de 20 en 20 solicitudes e inventario). */
+let adminPageSolicitudes = 1;
+let adminPageProductos = 1;
+let adminPagePedidos = 1;
+
 async function loadCatalog(page = 1) {
   const grid = document.getElementById('products-grid');
   const paginationEl = document.getElementById('catalog-pagination');
@@ -194,17 +214,17 @@ async function loadCatalog(page = 1) {
   }
 }
 
-function renderPagination(el, meta) {
+function renderPagination(el, meta, fnName = 'loadCatalog') {
   if (meta.last_page <= 1) { el.innerHTML = ''; return; }
   let html = '';
   if (meta.current_page > 1) {
-    html += `<button class="mc-page-btn" onclick="loadCatalog(${meta.current_page - 1})">‹</button>`;
+    html += `<button class="mc-page-btn" onclick="${fnName}(${meta.current_page - 1})">‹</button>`;
   }
   for (let i = 1; i <= meta.last_page; i++) {
-    html += `<button class="mc-page-btn ${i === meta.current_page ? 'active' : ''}" onclick="loadCatalog(${i})">${i}</button>`;
+    html += `<button class="mc-page-btn ${i === meta.current_page ? 'active' : ''}" onclick="${fnName}(${i})">${i}</button>`;
   }
   if (meta.current_page < meta.last_page) {
-    html += `<button class="mc-page-btn" onclick="loadCatalog(${meta.current_page + 1})">›</button>`;
+    html += `<button class="mc-page-btn" onclick="${fnName}(${meta.current_page + 1})">›</button>`;
   }
   el.innerHTML = html;
 }
@@ -322,6 +342,24 @@ function openReserveModal(id) {
     btn.innerHTML = '<i class="fa-solid fa-calendar-check"></i> Confirmar Reserva 48h Gratis';
   }
 
+  /*
+   * Reset del bloque de compra. Tras un pedido contra reembolso el formulario
+   * se oculta y se deja el resumen del pedido; sin limpiarlo, al abrir otra
+   * lavadora el modal salía sin formulario y con el pedido anterior.
+   */
+  const buyForm = document.getElementById('buy-order-form');
+  if (buyForm) {
+    buyForm.reset();
+    buyForm.style.display = '';
+  }
+  const buyResult = document.getElementById('buy-order-result');
+  if (buyResult) {
+    buyResult.style.display = 'none';
+    buyResult.innerHTML = '';
+  }
+  const buyError = document.getElementById('buy-order-error');
+  if (buyError) buyError.textContent = '';
+
   openModal('reserve-modal');
 }
 
@@ -411,15 +449,29 @@ async function submitContact(e) {
     successEl.innerHTML = `
       <div style="margin-bottom:.75rem">${esc(json?.message || 'Solicitud recibida. Te contactaremos en breve.')}</div>
       <a href="${waUrl}" target="_blank" rel="noopener" class="mc-btn mc-btn-whatsapp mc-btn-block">
-        <i class="fa-brands fa-whatsapp" style="font-size:1.2rem"></i> Hablar con un Técnico por WhatsApp
+        <i class="fa-brands fa-whatsapp" style="font-size:1.2rem"></i> Continuar por WhatsApp
       </a>
     `;
     showToast('Solicitud enviada correctamente', 'success');
   } else if (status === 422 && json?.errors) {
+    /*
+     * Se pinta cada error junto a su campo y, si el campo no tiene hueco
+     * propio en el HTML (p. ej. tipo_aparato, que va en un input oculto),
+     * se muestra arriba. Antes esos errores se perdían en silencio y el
+     * formulario "no hacía nada".
+     */
+    const sueltos = [];
     Object.entries(json.errors).forEach(([field, msgs]) => {
       const errEl = document.getElementById('err-' + field);
-      if (errEl) errEl.textContent = msgs[0];
+      if (errEl) {
+        errEl.textContent = msgs[0];
+      } else {
+        sueltos.push(msgs[0]);
+      }
     });
+    errorEl.innerHTML = sueltos.length
+      ? '<p class="mc-form-error">' + esc(sueltos.join(' ')) + '</p>'
+      : '';
   } else {
     errorEl.innerHTML = '<p class="mc-form-error">' + (json?.message || 'Error al enviar la solicitud.') + '</p>';
   }
@@ -522,27 +574,32 @@ function hideAdminPanel() {
 }
 
 /* --- Admin: Solicitudes --- */
-async function loadAdminSolicitudes() {
+async function loadAdminSolicitudes(page = 1) {
   const tbody = document.getElementById('solicitudes-tbody');
+  const paginacionEl = document.getElementById('solicitudes-paginacion');
   if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center"><span class="mc-spinner"></span></td></tr>';
 
+  const params = new URLSearchParams();
   const filtro = document.getElementById('admin-filtro-estado')?.value || '';
-  const qs = filtro ? '?estado=' + filtro : '';
-  const { ok, json } = await apiCall('GET', '/admin/solicitudes' + qs, null, true);
+  if (filtro) params.set('estado', filtro);
+  params.set('page', page);
+
+  const { ok, json } = await apiCall('GET', '/admin/solicitudes?' + params.toString(), null, true);
 
   if (!ok || !json?.data) {
     tbody.innerHTML = '<tr><td colspan="6">Error al cargar</td></tr>';
     return;
   }
 
-  // Update KPI
-  const pendientesCount = json.data.filter(s => s.estado === 'pendiente').length;
+  // KPI global calculado en el servidor (no la cuenta de esta página).
+  adminPageSolicitudes = json.meta?.current_page || 1;
   const kpiEl = document.getElementById('kpi-solicitudes-pendientes');
-  if (kpiEl) kpiEl.textContent = pendientesCount;
+  if (kpiEl && json.kpis) kpiEl.textContent = json.kpis.pendientes;
 
   if (json.data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--mc-text-muted)">Sin solicitudes</td></tr>';
+    if (paginacionEl) paginacionEl.innerHTML = '';
     return;
   }
 
@@ -562,43 +619,49 @@ async function loadAdminSolicitudes() {
       </td>
     </tr>
   `).join('');
+
+  if (paginacionEl && json.meta) renderPagination(paginacionEl, json.meta, 'loadAdminSolicitudes');
 }
 
 async function updateSolicitudEstado(id, estado) {
   const { ok } = await apiCall('PATCH', `/admin/solicitudes/${id}`, { estado }, true);
   if (ok) {
     showToast('Estado actualizado', 'success');
-    loadAdminSolicitudes();
+    loadAdminSolicitudes(adminPageSolicitudes);
   } else {
     showToast('Error al actualizar', 'error');
   }
 }
 
 /* --- Admin: Productos / Inventario --- */
-async function loadAdminProductos() {
+async function loadAdminProductos(page = 1) {
   const tbody = document.getElementById('productos-tbody');
+  const paginacionEl = document.getElementById('productos-paginacion');
   if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center"><span class="mc-spinner"></span></td></tr>';
 
+  const params = new URLSearchParams();
   const filtro = document.getElementById('admin-filtro-producto-estado')?.value || '';
-  const qs = filtro ? '?estado=' + filtro : '';
-  const { ok, json } = await apiCall('GET', '/admin/productos' + qs, null, true);
+  if (filtro) params.set('estado', filtro);
+  params.set('page', page);
+
+  const { ok, json } = await apiCall('GET', '/admin/productos?' + params.toString(), null, true);
 
   if (!ok || !json?.data) {
     tbody.innerHTML = '<tr><td colspan="7">Error al cargar</td></tr>';
     return;
   }
 
-  // Update KPIs
-  const dispCount = json.data.filter(p => p.estado_stock === 'disponible').length;
-  const resCount = json.data.filter(p => p.estado_stock === 'reservado').length;
+  // KPIs globales calculados en el servidor.
+  adminPageProductos = json.meta?.current_page || 1;
   const elDisp = document.getElementById('kpi-productos-disponibles');
   const elRes = document.getElementById('kpi-reservas-activas');
-  if (elDisp) elDisp.textContent = dispCount;
-  if (elRes) elRes.textContent = resCount;
+  if (elDisp && json.kpis) elDisp.textContent = json.kpis.disponibles;
+  if (elRes && json.kpis) elRes.textContent = json.kpis.reservados;
 
   if (json.data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--mc-text-muted)">Sin productos</td></tr>';
+    if (paginacionEl) paginacionEl.innerHTML = '';
     return;
   }
 
@@ -618,6 +681,8 @@ async function loadAdminProductos() {
       </td>
     </tr>
   `).join('');
+
+  if (paginacionEl && json.meta) renderPagination(paginacionEl, json.meta, 'loadAdminProductos');
 }
 
 async function deleteProduct(id) {
@@ -625,7 +690,7 @@ async function deleteProduct(id) {
   const { ok, json } = await apiCall('DELETE', `/admin/productos/${id}`, null, true);
   if (ok) {
     showToast('Lavadora eliminada', 'success');
-    loadAdminProductos();
+    loadAdminProductos(adminPageProductos);
   } else {
     showToast(json?.message || 'No se puede eliminar', 'error');
   }
@@ -638,7 +703,7 @@ function openEditProductModal(id) {
     apiCall('PATCH', `/admin/productos/${id}`, { estado_stock: nuevo }, true).then(({ ok }) => {
       if (ok) {
         showToast('Producto actualizado', 'success');
-        loadAdminProductos();
+        loadAdminProductos(adminPageProductos);
         loadCatalog(currentPage);
       } else {
         showToast('Error al actualizar', 'error');
@@ -659,6 +724,14 @@ async function createProduct(e) {
   formData.append('modelo', form.modelo.value.trim());
   formData.append('precio', form.precio.value);
   formData.append('meses_garantia', form.meses_garantia.value);
+
+  /*
+   * Sin esto el alta ignoraba el selector del panel y todo producto nuevo se
+   * guardaba con el valor por defecto de la BD ('reacondicionado'), aunque
+   * se hubiera marcado "Nuevo".
+   */
+  if (form.condicion?.value) formData.append('condicion', form.condicion.value);
+  if (form.garantia_tipo?.value?.trim()) formData.append('garantia_tipo', form.garantia_tipo.value.trim());
 
   if (form.capacidad_kg?.value) formData.append('capacidad_kg', form.capacidad_kg.value);
   if (form.rpm?.value) formData.append('rpm', form.rpm.value);
@@ -746,30 +819,55 @@ async function submitBuyOrder(e) {
 }
 
 /* --- Admin: Pedidos --- */
-async function loadAdminPedidos() {
+async function loadAdminPedidos(page = 1) {
   const tbody = document.getElementById('pedidos-tbody');
+  const paginacionEl = document.getElementById('pedidos-paginacion');
   if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center"><span class="mc-spinner"></span></td></tr>';
 
-  const { ok, json } = await apiCall('GET', '/admin/pedidos', null, true);
+  const { ok, json } = await apiCall('GET', '/admin/pedidos?page=' + page, null, true);
 
   if (!ok || !json?.data) {
     tbody.innerHTML = '<tr><td colspan="7">Error al cargar pedidos</td></tr>';
     return;
   }
 
+  // LengthAwarePaginator serializa current_page/last_page en la raíz si no pasa por JsonResource
+  const meta = json.meta || json;
+  adminPagePedidos = meta?.current_page || 1;
+
   if (json.data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--mc-text-muted)">Sin pedidos registrados</td></tr>';
+    if (paginacionEl) paginacionEl.innerHTML = '';
     return;
   }
 
-  tbody.innerHTML = json.data.map(p => `
+  tbody.innerHTML = json.data.map(p => {
+    /* La lavadora vendida es lo primero que pregunta el taller al ver un
+       pedido: el controlador ya la cargaba con with('producto'), pero la
+       tabla no la pintaba. */
+    const lavadora = p.producto
+      ? `${esc(p.producto.marca)} ${esc(p.producto.modelo)}`
+      : `<span style="color:var(--mc-text-muted)">Producto #${p.producto_id}</span>`;
+
+    const pagoClase = p.estado_pago === 'pagado' ? 'finalizada'
+      : (p.estado_pago === 'fallido' ? 'fallido' : 'pendiente');
+
+    return `
     <tr>
       <td>#${p.id}</td>
       <td>${esc(p.cliente_nombre)}<br><small><a href="tel:${p.cliente_telefono}">${p.cliente_telefono}</a></small></td>
       <td>${esc(p.cliente_direccion)} (${esc(p.cliente_localidad)})</td>
-      <td>${formatPrice(p.total)} (${p.metodo_pago.toUpperCase()})</td>
-      <td><span class="mc-status mc-status-${p.estado_pago === 'pagado' ? 'finalizada' : 'pendiente'}">${p.estado_pago}</span></td>
+      <td>${lavadora}</td>
+      <td>${formatPrice(p.total)} (${esc((p.metodo_pago || '').toUpperCase())})</td>
+      <td>
+        <select onchange="updatePedidoEstado(${p.id}, 'estado_pago', this.value)" class="mc-select" style="padding:.35rem .5rem;font-size:.8rem;width:auto">
+          <option value="pendiente" ${p.estado_pago === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+          <option value="pagado" ${p.estado_pago === 'pagado' ? 'selected' : ''}>Pagado</option>
+          <option value="fallido" ${p.estado_pago === 'fallido' ? 'selected' : ''}>Fallido</option>
+        </select>
+        <br><small class="mc-status mc-status-${pagoClase}" style="margin-top:.25rem;display:inline-block">${p.estado_pago}</small>
+      </td>
       <td>
         <select onchange="updatePedidoEstado(${p.id}, 'estado_envio', this.value)" class="mc-select" style="padding:.35rem .5rem;font-size:.8rem;width:auto">
           <option value="pendiente" ${p.estado_envio === 'pendiente' ? 'selected' : ''}>Pendiente</option>
@@ -778,7 +876,10 @@ async function loadAdminPedidos() {
         </select>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
+
+  if (paginacionEl && meta?.last_page) renderPagination(paginacionEl, meta, 'loadAdminPedidos');
 }
 
 async function updatePedidoEstado(id, campo, valor) {
@@ -787,7 +888,7 @@ async function updatePedidoEstado(id, campo, valor) {
   const { ok } = await apiCall('PATCH', `/admin/pedidos/${id}`, body, true);
   if (ok) {
     showToast('Pedido actualizado', 'success');
-    loadAdminPedidos();
+    loadAdminPedidos(adminPagePedidos);
   } else {
     showToast('Error al actualizar', 'error');
   }
@@ -823,8 +924,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-confirm-reserve')?.addEventListener('click', confirmReserve);
   document.getElementById('buy-order-form')?.addEventListener('submit', submitBuyOrder);
   document.getElementById('admin-create-product-form')?.addEventListener('submit', createProduct);
-  document.getElementById('admin-filtro-estado')?.addEventListener('change', loadAdminSolicitudes);
-  document.getElementById('admin-filtro-producto-estado')?.addEventListener('change', loadAdminProductos);
+  /* Al cambiar de filtro se vuelve a la primera página: si no, se pide la
+     página 3 de un resultado que ahora puede tener una sola. El listener
+     recibe el evento, así que se envuelve para no pasarlo como página. */
+  document.getElementById('admin-filtro-estado')?.addEventListener('change', () => loadAdminSolicitudes(1));
+  document.getElementById('admin-filtro-producto-estado')?.addEventListener('change', () => loadAdminProductos(1));
 
   document.querySelectorAll('.mc-modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', (e) => {
@@ -839,6 +943,8 @@ window.switchModalGalleryImage = switchModalGalleryImage;
 window.confirmReserve = confirmReserve;
 window.submitBuyOrder = submitBuyOrder;
 window.loadAdminPedidos = loadAdminPedidos;
+window.loadAdminSolicitudes = loadAdminSolicitudes;
+window.loadAdminProductos = loadAdminProductos;
 window.updatePedidoEstado = updatePedidoEstado;
 window.updateSolicitudEstado = updateSolicitudEstado;
 window.deleteProduct = deleteProduct;

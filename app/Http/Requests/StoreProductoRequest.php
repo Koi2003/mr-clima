@@ -45,7 +45,12 @@ class StoreProductoRequest extends FormRequest
             'garantia_tipo'         => ['nullable', 'string', 'max:100'],
             'imagen_url'            => ['nullable', 'string', 'max:2048'],
             'imagenes'              => ['nullable', 'array', 'max:5'],
-            'imagenes.*'            => ['nullable'],
+            /*
+             * 'nullable' a secas aceptaba cualquier archivo: un .php, un .exe
+             * o un PDF de 200 MB. El límite de 5 MB es el que anuncia la
+             * propia caja de subida del panel.
+             */
+            'imagenes.*'            => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
     }
 

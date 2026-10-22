@@ -34,6 +34,16 @@ Route::post('/admin/login', [AuthController::class, 'login'])
 
 /*
 |--------------------------------------------------------------------------
+| Webhook de Stripe (servidor a servidor)
+|--------------------------------------------------------------------------
+| Va FUERA del grupo con throttle: no lo invoca un navegador, y Stripe
+| reintenta la entrega si no recibe un 2xx. La autenticidad se comprueba
+| con la firma HMAC del propio webhook.
+*/
+Route::post('/webhooks/stripe', \App\Http\Controllers\Api\StripeWebhookController::class);
+
+/*
+|--------------------------------------------------------------------------
 | Panel de administración (protegido con Sanctum)
 |--------------------------------------------------------------------------
 */

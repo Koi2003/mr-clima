@@ -157,7 +157,7 @@
                 <button type="button" class="mc-service-btn" data-aparato="frigorifico">
                     <i class="fa-solid fa-temperature-arrow-down" style="color:#5FA8AC;font-size:1.1rem"></i> Frigorífico
                 </button>
-                <button type="button" class="mc-service-btn" data-aparato="calefaccion">
+                <button type="button" class="mc-service-btn" data-aparato="caldera">
                     <i class="fa-solid fa-fire-flame-curved" style="color:var(--mc-warning);font-size:1.1rem"></i> Caldera / Clima
                 </button>
             </div>
@@ -339,7 +339,7 @@
     <div class="mc-container">
         <div class="mc-section-header">
             <h2><i class="fa-solid fa-clipboard-check" style="color:var(--mc-accent)"></i> Cómo trabajamos</h2>
-            <p>Sin intermediarios ni call centers: hablas directamente con quien repara tu lavadora.</p>
+            <p>Sin intermediarios ni call centers: te atiende directamente la dirección de Mister Clima.</p>
             <span class="mc-accent-line"></span>
         </div>
 

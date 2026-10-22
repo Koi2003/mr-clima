@@ -1,3 +1,11 @@
+# La raíz del proyecto lleva un .htaccess con "Require all denied" para que
+# Apache no publique el .env ni los logs. Esa regla se hereda hacia abajo, así
+# que aquí hay que volver a conceder el acceso SOLO a esta carpeta: es la única
+# que debe ser pública.
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

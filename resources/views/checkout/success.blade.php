@@ -35,9 +35,9 @@
                 <p style="color:var(--mc-text-secondary);margin-bottom:1rem">
                     Gracias por tu compra. Te contactaremos por teléfono para coordinar la entrega e instalación de tu lavadora.
                 </p>
-                @if ($pedido)
+                @if (!empty($resumen))
                     <p style="font-size:.9rem;color:var(--mc-text);margin-bottom:1.25rem">
-                        Pedido <strong>#{{ $pedido->id }}</strong> · Total <strong>{{ number_format((float) $pedido->total, 2, ',', '.') }} €</strong>
+                        Pedido <strong>#{{ $resumen['pedido_id'] }}</strong> · Total <strong>{{ number_format($resumen['total'], 2, ',', '.') }} €</strong>
                     </p>
                 @endif
                 <a href="{{ url('/') }}" class="mc-btn mc-btn-primary mc-btn-block">

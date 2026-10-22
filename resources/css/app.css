@@ -168,7 +168,9 @@ img { max-width: 100%; height: auto; display: block; }
   transition: all var(--mc-transition-slow);
 }
 [data-theme='dark'] .mc-header {
-  background: rgba(28, 37, 65, 0.85);
+  /* Mismo tono cálido que --mc-bg (#16130F). Antes era un azul marino
+     frío que desentonaba con el resto del modo oscuro. */
+  background: rgba(22, 19, 15, 0.85);
 }
 
 .mc-header-inner {
@@ -1026,6 +1028,11 @@ img { max-width: 100%; height: auto; display: block; }
 .mc-status-vendido {
   background: rgba(100,116,139,.15);
   color: var(--mc-text-muted);
+}
+/* Pedido cuya sesión de pago caducó o cuyo cobro falló. */
+.mc-status-fallido {
+  background: rgba(180,52,44,.15);
+  color: var(--mc-danger);
 }
 
 /* --- Pagination --- */

@@ -16,11 +16,15 @@ class DatabaseSeeder extends Seeder
     {
         /*
         | Administrador del panel.
-        | La contraseña se toma de ADMIN_PASSWORD (.env). Si no está
-        | definida, se genera una aleatoria y se muestra UNA sola vez.
+        | La contraseña sale de config('mrclima.admin_password') —que a su vez
+        | lee ADMIN_PASSWORD del .env—. Se usa config() y NO env() porque con
+        | la caché de configuración activa (config:cache, obligatoria en
+        | producción) env() devuelve siempre null.
+        | Si no está definida, se genera una aleatoria y se muestra UNA vez.
         | Para cambiarla después: php artisan admin:password
         */
-        $password = (string) (env('ADMIN_PASSWORD') ?: Str::password(16));
+        $passwordConfigurada = config('mrclima.admin_password');
+        $password = (string) ($passwordConfigurada ?: Str::password(16));
 
         $admin = User::firstOrCreate(
             ['email' => 'admin@misterclima.es'],
@@ -30,7 +34,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        if ($admin->wasRecentlyCreated && ! env('ADMIN_PASSWORD')) {
+        if ($admin->wasRecentlyCreated && ! $passwordConfigurada) {
             $this->command?->warn("Contraseña del administrador generada: {$password}");
             $this->command?->warn('Apúntala ahora: no se volverá a mostrar.');
         }

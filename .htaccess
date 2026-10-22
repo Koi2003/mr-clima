@@ -1,0 +1,23 @@
+# =====================================================================
+#  Mister Clima — protección de la raíz del proyecto
+# =====================================================================
+#  Este proyecto se sirve desde /public, pero el DocumentRoot de XAMPP
+#  apunta a htdocs: sin este archivo, Apache publicaba el .env entero
+#  (APP_KEY, clave SMTP de Brevo, clave secreta de Stripe), los logs con
+#  datos de clientes y el .git/config en http://<ip-del-equipo>/Misclim/...
+#
+#  Aquí se deniega todo y public/.htaccess vuelve a conceder el acceso
+#  solo a esa carpeta. Es también la red de seguridad para producción:
+#  si en el hosting se apunta el DocumentRoot a la raíz del proyecto por
+#  error, el .env sigue sin ser accesible.
+# =====================================================================
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2 (por si el hosting es antiguo)
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

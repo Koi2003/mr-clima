@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Pedido;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PedidoAdminController extends Controller
 {
@@ -29,7 +30,14 @@ class PedidoAdminController extends Controller
         return response()->json($pedidos);
     }
 
-    /** PATCH /api/admin/pedidos/{pedido} */
+    /**
+     * PATCH /api/admin/pedidos/{pedido}
+     *
+     * Cambiar el estado del pago a mano (por ejemplo al cobrar en mano una
+     * entrega) también mueve la lavadora: si no, el pedido se marcaba como
+     * pagado y la unidad seguía apareciendo como reservada o disponible en el
+     * catálogo, con el riesgo de venderla dos veces.
+     */
     public function update(Request $request, Pedido $pedido): JsonResponse
     {
         $validated = $request->validate([
@@ -37,7 +45,21 @@ class PedidoAdminController extends Controller
             'estado_envio' => ['sometimes', 'in:pendiente,en_reparto,entregado'],
         ]);
 
-        $pedido->update($validated);
+        DB::transaction(function () use ($pedido, $validated): void {
+            $pedido->update($validated);
+
+            $producto = $pedido->producto;
+
+            if ($producto === null) {
+                return;
+            }
+
+            match ($validated['estado_pago'] ?? null) {
+                'pagado'  => $producto->marcarComoVendido(),
+                'fallido' => $producto->liberar(),
+                default   => null,
+            };
+        });
 
         return response()->json([
             'message' => 'Pedido actualizado correctamente',

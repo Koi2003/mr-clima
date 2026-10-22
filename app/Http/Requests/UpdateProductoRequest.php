@@ -58,7 +58,8 @@ class UpdateProductoRequest extends FormRequest
             'garantia_tipo'         => ['sometimes', 'nullable', 'string', 'max:100'],
             'imagen_url'            => ['sometimes', 'nullable', 'string', 'max:2048'],
             'imagenes'              => ['sometimes', 'nullable', 'array', 'max:5'],
-            'imagenes.*'            => ['nullable'],
+            // Mismas reglas que en el alta: solo imágenes reales de hasta 5 MB.
+            'imagenes.*'            => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'estado_stock'          => ['sometimes', 'required', Rule::enum(EstadoStock::class)],
         ];
     }
